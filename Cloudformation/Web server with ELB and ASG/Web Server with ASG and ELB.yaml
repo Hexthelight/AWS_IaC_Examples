@@ -1,0 +1,170 @@
+Resources:
+ TestVPC:
+  Type: AWS::EC2::VPC
+  Properties:
+   CidrBlock: 15.0.0.0/20
+   Tags:
+   - Key: Name
+     Value: Test-VPC
+   - Key: Test
+     Value: Yes
+ MyIGW:
+  Type: AWS::EC2::InternetGateway
+  Properties:
+   Tags:
+   - Key: Test
+     Value: Yes
+ VPCGatewayConnection:
+  Type: AWS::EC2::VPCGatewayAttachment
+  Properties:
+   InternetGatewayId:
+    Ref: MyIGW
+   VpcId:
+    Ref: TestVPC
+ MySubnet1:
+  Type: AWS::EC2::Subnet
+  Properties:
+   CidrBlock: 15.0.5.0/24
+   MapPublicIpOnLaunch: true
+   VpcId:
+    Ref: TestVPC 
+   AvailabilityZone: eu-west-3a
+   Tags:
+   - Key: Name
+     Value: Public Subnet 1
+   - Key: Test
+     Value: Yes
+ MySubnet2:
+  Type: AWS::EC2::Subnet
+  Properties:
+   CidrBlock: 15.0.10.0/24
+   MapPublicIpOnLaunch: true
+   VpcId:
+    Ref: TestVPC 
+   AvailabilityZone: eu-west-3b
+   Tags:
+   - Key: Name
+     Value: Public Subnet 2
+   - Key: Test
+     Value: Yes
+ MyRouteTable:
+  Type: AWS::EC2::RouteTable
+  Properties:
+   VpcId:
+    Ref: TestVPC
+   Tags:
+   - Key: Name
+     Value: TestRT
+   - Key: Test
+     Value: Yes
+ MyRoute:
+  Type: AWS::EC2::Route
+  Properties:
+   RouteTableId:
+    Ref: MyRouteTable
+   DestinationCidrBlock: 0.0.0.0/0
+   GatewayId:
+    Ref: MyIGW
+ MySubnetRoute1:
+  Type: AWS::EC2::SubnetRouteTableAssociation
+  Properties:
+   SubnetId:
+    Ref: MySubnet1
+   RouteTableId:
+    Ref: MyRouteTable
+ MySubnetRoute2:
+  Type: AWS::EC2::SubnetRouteTableAssociation
+  Properties:
+   SubnetId:
+    Ref: MySubnet2
+   RouteTableId:
+    Ref: MyRouteTable
+ MySG:
+  Type: AWS::EC2::SecurityGroup
+  Properties:
+   VpcId:
+    Ref: TestVPC
+   GroupName: TestSG
+   GroupDescription: To allow SSH
+   SecurityGroupIngress:
+   - IpProtocol: tcp
+     FromPort: 22
+     ToPort: 22
+     CidrIp: 0.0.0.0/0
+   - IpProtocol: tcp
+     FromPort: 80
+     ToPort: 80
+     CidrIp: 0.0.0.0/0
+   SecurityGroupEgress:
+   - IpProtocol: tcp
+     FromPort: 22
+     ToPort: 22
+     CidrIp: 0.0.0.0/0
+   - IpProtocol: tcp
+     FromPort: 80
+     ToPort: 80
+     CidrIp: 0.0.0.0/0
+   Tags:
+   - Key: Test
+     Value: Yes
+ ELB:
+  Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+  Properties:
+   Name: Test-ELB
+   Subnets:
+   - Ref: MySubnet1
+   - Ref: MySubnet2
+   SecurityGroups:
+   - Ref: MySG
+   Tags:
+   - Key: Test
+     Value: Yes
+ ELBTargetGroup:
+  Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  Properties:
+   Name: TestTargetGroup
+   Port: 80
+   Protocol: HTTP
+   VpcId:
+    Ref: TestVPC
+   Tags:
+   - Key: Test
+     Value: Yes  
+ ELBListener:
+  Type: AWS::ElasticLoadBalancingV2::Listener
+  Properties:
+   LoadBalancerArn:
+    Ref: ELB
+   Port: 80
+   Protocol: HTTP
+   DefaultActions:
+    - Type: "forward"
+      TargetGroupArn:
+       Ref: ELBTargetGroup
+ ASG:
+  Type: AWS::AutoScaling::AutoScalingGroup
+  Properties:
+   AvailabilityZones:
+   - eu-west-3a
+   - eu-west-3b
+   VPCZoneIdentifier:
+   - Ref: MySubnet1
+   - Ref: MySubnet2
+   DesiredCapacity: 1
+   MaxSize: 2
+   MinSize: 0 
+   HealthCheckType: ELB
+   HealthCheckGracePeriod: 300
+   LaunchConfigurationName:
+    Ref: ASGLaunchConfig
+   TargetGroupARNs:
+   - Ref: ELBTargetGroup
+ ASGLaunchConfig:
+  Type: AWS::AutoScaling::LaunchConfiguration
+  Properties:
+   LaunchConfigurationName: Web Server Config
+   AssociatePublicIpAddress: true
+   ImageId: ami-0cf754bf60ea3bf22
+   InstanceType: t2.micro
+   SecurityGroups:
+   - Ref: MySG
